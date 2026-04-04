@@ -209,7 +209,11 @@ class GranularProcessor {
   FloatFrame out_downsampled_[kMaxBlockSize / kDownsamplingFactor];
   FloatFrame out_[kMaxBlockSize];
   FloatFrame fb_[kMaxBlockSize];
-  
+
+  static const int32_t kDecorrelationDelay = 64;  // ~2ms at 32kHz
+  float decorrelation_delay_[kDecorrelationDelay];
+  int32_t decorrelation_ptr_;
+
   int16_t tail_buffer_[2][256];
   
   Parameters parameters_;

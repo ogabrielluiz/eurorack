@@ -54,6 +54,8 @@ void GranularProcessor::Init(
   low_fidelity_ = false;
   bypass_ = false;
   reverse_ = false;
+  decorrelation_ptr_ = 0;
+  std::fill(&decorrelation_delay_[0], &decorrelation_delay_[kDecorrelationDelay], 0.0f);
   
   src_down_.Init();
   src_up_.Init();
@@ -305,7 +307,15 @@ void GranularProcessor::Process(
   
   // This is what is fed back. Reverb is not fed back.
   copy(&out_[0], &out_[size], &fb_[0]);
-  
+
+  // Stereo decorrelation: ~4ms delay on right channel (Haas effect).
+  for (size_t i = 0; i < size; ++i) {
+    float delayed = decorrelation_delay_[decorrelation_ptr_];
+    decorrelation_delay_[decorrelation_ptr_] = out_[i].r;
+    out_[i].r = delayed;
+    decorrelation_ptr_ = (decorrelation_ptr_ + 1) & (kDecorrelationDelay - 1);
+  }
+
   // Apply reverb.
   float reverb_amount = parameters_.reverb * 0.95f;
   reverb_amount += feedback * (2.0f - feedback) * freeze_lp_;
