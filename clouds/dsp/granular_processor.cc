@@ -62,6 +62,7 @@ void GranularProcessor::Init(
   previous_playback_mode_ = PLAYBACK_MODE_LAST;
   reset_buffers_ = true;
   dry_wet_ = 0.0f;
+  input_envelope_ = 0.0f;
 }
 
 void GranularProcessor::ResetFilters() {
@@ -201,6 +202,18 @@ void GranularProcessor::Process(
     }
   }
   
+  // Input envelope for perceptual masking of grain scatter.
+  {
+    float block_peak = 0.0f;
+    for (size_t i = 0; i < size; ++i) {
+      float level = fabsf(in_[i].l) + fabsf(in_[i].r);
+      if (level > block_peak) block_peak = level;
+    }
+    float coeff = block_peak > input_envelope_ ? 0.5f : 0.01f;
+    ONE_POLE(input_envelope_, block_peak, coeff);
+    parameters_.granular.input_level = std::min(input_envelope_, 1.0f);
+  }
+
   // Apply feedback, with high-pass filtering to prevent build-ups at very
   // low frequencies (causing large DC swings).
   ONE_POLE(freeze_lp_, parameters_.freeze ? 1.0f : 0.0f, 0.0005f)

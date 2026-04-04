@@ -189,7 +189,8 @@ class GranularProcessor {
   stmlib::Svf hp_filter_[2];
   stmlib::Svf lp_filter_[2];
   float fb_lp_state_[2];
-  
+  float input_envelope_;
+
   AudioBuffer<RESOLUTION_8_BIT_MU_LAW> buffer_8_[2];
   AudioBuffer<RESOLUTION_16_BIT> buffer_16_[2];
   

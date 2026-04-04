@@ -82,10 +82,14 @@ class GranularSamplePlayer {
 
     // Freeze smoothly scales jitter/detune to zero.
     ONE_POLE(freeze_blend_, parameters.freeze ? 1.0f : 0.0f, 0.005f);
+    // Perceptual masking: tighten scatter when input is quiet (artifacts
+    // would be exposed), loosen when loud (signal masks them).
+    float masking = 0.4f + 0.6f * std::min(
+        parameters.granular.input_level * 2.0f, 1.0f);
     float effective_jitter = parameters.granular.jitter_amount
-        * (1.0f - freeze_blend_);
+        * (1.0f - freeze_blend_) * masking;
     float effective_detune = parameters.granular.detune_cents
-        * (1.0f - freeze_blend_);
+        * (1.0f - freeze_blend_) * masking;
 
     // Scale probabilistic rate by (1 - determinism).
     float p_scaled = p * (1.0f - determinism);
