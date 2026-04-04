@@ -53,6 +53,7 @@ void GranularProcessor::Init(
   num_channels_ = 2;
   low_fidelity_ = false;
   bypass_ = false;
+  reverse_ = false;
   
   src_down_.Init();
   src_up_.Init();
@@ -67,9 +68,10 @@ void GranularProcessor::Init(
 
 void GranularProcessor::ResetFilters() {
   for (int32_t i = 0; i < 2; ++i) {
-    fb_filter_[i].Init();
     lp_filter_[i].Init();
     hp_filter_[i].Init();
+    fb_dc_state_[i] = 0.0f;
+    fb_bass_state_[i] = 0.0f;
     fb_lp_state_[i] = 0.0f;
   }
 }
@@ -122,6 +124,7 @@ void GranularProcessor::ProcessGranular(
         parameters_.granular.detune_cents = (tex > 0.5f)
             ? std::min((tex - 0.5f) * 4.0f * 1.5f, 1.5f) : 0.0f;
       }
+      parameters_.granular.reverse = reverse_;
   
       if (resolution() == 8) {
         player_.Play(buffer_8_, parameters_, &output[0].l, size);
@@ -214,17 +217,25 @@ void GranularProcessor::Process(
     parameters_.granular.input_level = std::min(input_envelope_, 1.0f);
   }
 
-  // Apply feedback, with high-pass filtering to prevent build-ups at very
-  // low frequencies (causing large DC swings).
+  // Feedback filtering: DC block + bass shelf + HF damping.
   ONE_POLE(freeze_lp_, parameters_.freeze ? 1.0f : 0.0f, 0.0005f)
   float feedback = parameters_.feedback;
-  float cutoff = (20.0f + 100.0f * feedback * feedback) / sample_rate();
-  fb_filter_[0].set_f_q<FREQUENCY_FAST>(cutoff, 1.0f);
-  fb_filter_[1].set(fb_filter_[0]);
-  fb_filter_[0].Process<FILTER_MODE_HIGH_PASS>(&fb_[0].l, &fb_[0].l, size, 2);
-  fb_filter_[1].Process<FILTER_MODE_HIGH_PASS>(&fb_[0].r, &fb_[0].r, size, 2);
-  const float fb_lp_coeff = 0.18f;  // ~6kHz cutoff at 32kHz
+  const float dc_coeff = 0.001f;    // DC blocker at ~5Hz
+  const float bass_coeff = 0.039f;  // bass shelf knee at ~200Hz
+  const float fb_lp_coeff = 0.18f;  // HF damping at ~6kHz
+  float bass_cut = feedback * feedback * 0.85f;
   for (size_t i = 0; i < size; ++i) {
+    // DC block
+    ONE_POLE(fb_dc_state_[0], fb_[i].l, dc_coeff);
+    fb_[i].l -= fb_dc_state_[0];
+    ONE_POLE(fb_dc_state_[1], fb_[i].r, dc_coeff);
+    fb_[i].r -= fb_dc_state_[1];
+    // Bass shelf: attenuate lows proportionally to feedback
+    ONE_POLE(fb_bass_state_[0], fb_[i].l, bass_coeff);
+    fb_[i].l -= fb_bass_state_[0] * bass_cut;
+    ONE_POLE(fb_bass_state_[1], fb_[i].r, bass_coeff);
+    fb_[i].r -= fb_bass_state_[1] * bass_cut;
+    // HF damping
     ONE_POLE(fb_lp_state_[0], fb_[i].l, fb_lp_coeff);
     fb_[i].l = fb_lp_state_[0];
     ONE_POLE(fb_lp_state_[1], fb_[i].r, fb_lp_coeff);

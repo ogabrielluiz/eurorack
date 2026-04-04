@@ -64,10 +64,19 @@ class Grain {
       float window_shape,
       float gain_l,
       float gain_r,
-      GrainQuality recommended_quality) {
+      GrainQuality recommended_quality,
+      bool reverse = false) {
     pre_delay_ = pre_delay;
     width_ = width;
-    first_sample_ = (start + buffer_size) % buffer_size;
+    reverse_ = reverse;
+    if (reverse) {
+      // Start at the end of the range so we read backwards.
+      int32_t end = start + static_cast<int32_t>(
+          static_cast<int64_t>(width) * phase_increment >> 16);
+      first_sample_ = (end + buffer_size) % buffer_size;
+    } else {
+      first_sample_ = (start + buffer_size) % buffer_size;
+    }
     phase_increment_ = phase_increment;
     phase_ = 0;
     envelope_phase_ = 0.0f;
@@ -146,9 +155,17 @@ class Grain {
     const int32_t first_sample = first_sample_;
     const float gain_l = gain_l_;
     const float gain_r = gain_r_;
+    const bool reverse = reverse_;
+    const int32_t buf_size = buffer[0].size();
     int32_t phase = phase_;
     while (size--) {
-      int32_t sample_index = first_sample + (phase >> 16);
+      int32_t sample_index;
+      if (reverse) {
+        sample_index = first_sample - (phase >> 16);
+        if (sample_index < 0) sample_index += buf_size;
+      } else {
+        sample_index = first_sample + (phase >> 16);
+      }
       
       float gain = *envelope++;
       if (gain == -1.0f) {
@@ -193,7 +210,8 @@ class Grain {
   float gain_r_;
 
   bool active_;
-  
+  bool reverse_;
+
   GrainQuality recommended_quality_;
 
   DISALLOW_COPY_AND_ASSIGN(Grain);

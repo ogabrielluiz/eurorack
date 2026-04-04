@@ -200,7 +200,12 @@ void Ui::PaintLeds() {
       break;
   }
   
-  leds_.set_freeze(processor_->frozen());
+  if (processor_->reversed()) {
+    // Blink FREEZE LED when reverse is active.
+    leds_.set_freeze(blink);
+  } else {
+    leds_.set_freeze(processor_->frozen());
+  }
   if (processor_->bypass()) {
     leds_.PaintBar(lut_db[meter_->peak() >> 7]);
     leds_.set_freeze(true);
@@ -242,6 +247,9 @@ void Ui::OnSecretHandshake() {
 void Ui::OnSwitchReleased(const Event& e) {
   switch (e.control_id) {
     case SWITCH_FREEZE:
+      if (e.data >= kLongPressDuration) {
+        processor_->ToggleReverse();
+      }
       break;
 
     case SWITCH_MODE:

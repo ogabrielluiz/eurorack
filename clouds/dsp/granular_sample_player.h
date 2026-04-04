@@ -123,6 +123,8 @@ class GranularSamplePlayer {
             static_cast<int32_t>(size) - 1,
             static_cast<int32_t>(t) + jitter_offset);
 
+        bool reverse = parameters.granular.reverse;
+
         Grain* g = &grains_[index];
         ScheduleGrain(
             g,
@@ -131,7 +133,8 @@ class GranularSamplePlayer {
             buffer->size(),
             buffer->head() - size + jittered_t,
             quality,
-            effective_detune);
+            effective_detune,
+            reverse);
         // Phasor dither: reset to small random offset.
         grain_rate_phasor_ = Random::GetFloat()
             * space_between_grains * effective_jitter;
@@ -204,7 +207,8 @@ class GranularSamplePlayer {
       int32_t buffer_size,
       int32_t buffer_head,
       GrainQuality quality,
-      float detune_cents) {
+      float detune_cents,
+      bool reverse) {
     float position = parameters.position;
     float pitch = parameters.pitch;
     if (detune_cents > 0.001f) {
@@ -259,7 +263,8 @@ class GranularSamplePlayer {
         window_shape,
         gain_l,
         gain_r,
-        quality);
+        quality,
+        reverse);
     ONE_POLE(grain_size_hint_, grain_size, 0.1f);
   }
   

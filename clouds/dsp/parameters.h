@@ -56,6 +56,7 @@ struct Parameters {
     float jitter_amount;
     float detune_cents;
     float input_level;
+    bool reverse;
   } granular;
   
   struct Spectral {
