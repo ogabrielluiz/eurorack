@@ -102,9 +102,8 @@ void GranularProcessor::ProcessGranular(
       } else {
         parameters_.granular.overlap = 0.0f;
       }
-      // And TEXTURE too.
-      parameters_.granular.window_shape = parameters_.texture < 0.75f
-          ? parameters_.texture * 1.333f : 1.0f;
+      // TEXTURE maps directly to Tukey alpha (full range, no dead zone).
+      parameters_.granular.window_shape = parameters_.texture;
   
       if (resolution() == 8) {
         player_.Play(buffer_8_, parameters_, &output[0].l, size);

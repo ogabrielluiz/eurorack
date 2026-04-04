@@ -72,12 +72,11 @@ class Grain {
     phase_ = 0;
     envelope_phase_ = 0.0f;
     envelope_phase_increment_ = 2.0f / static_cast<float>(width);
-    if (window_shape >= 0.5f) {
-      envelope_smoothness_ = (window_shape - 0.5f) * 2.0f;
-      envelope_slope_ = 0.0f;
-    } else {
-      envelope_smoothness_ = 0.0f;
-      envelope_slope_ = 0.5f / (window_shape + 0.01f);
+    // Tukey window: alpha = window_shape, ensure at least 4 samples of taper
+    float min_half_alpha = 4.0f / static_cast<float>(width > 0 ? width : 1);
+    envelope_half_alpha_ = window_shape * 0.5f;
+    if (envelope_half_alpha_ > 0.0f && envelope_half_alpha_ < min_half_alpha) {
+      envelope_half_alpha_ = min_half_alpha;
     }
     active_ = true;
     gain_l_ = gain_l;
@@ -85,32 +84,37 @@ class Grain {
     recommended_quality_ = recommended_quality;
   }
   
-  template<bool use_lut_for_envelope, GrainQuality quality>
   inline void RenderEnvelope(float* destination, size_t size) {
     const float increment = envelope_phase_increment_;
-    const float smoothness = envelope_smoothness_;
-    const float slope = envelope_slope_;
-
+    const float half_alpha = envelope_half_alpha_;
     float phase = envelope_phase_;
+
     while (size--) {
-      float gain = phase;
-      gain = gain >= 1.0f ? 2.0f - gain : gain;
-      if (use_lut_for_envelope) {
-        if (quality == GRAIN_QUALITY_HIGH) {
-          float window = 0.0f;
-          window = stmlib::Interpolate(lut_window, gain, 4096.0f);
-          gain += smoothness * (window - gain);
-        }
+      float gain;
+      if (half_alpha < 0.001f) {
+        // alpha ≈ 0: rectangular window
+        gain = (phase < 2.0f) ? 1.0f : -1.0f;
+      } else if (phase < half_alpha) {
+        // Rising taper: cosine ramp from 0 to 1
+        int32_t idx = static_cast<int32_t>(phase * 255.0f / half_alpha);
+        if (idx > 255) idx = 255;
+        gain = lut_tukey_taper[idx];
+      } else if (phase < 2.0f - half_alpha) {
+        // Flat top
+        gain = 1.0f;
+      } else if (phase < 2.0f) {
+        // Falling taper: cosine ramp from 1 to 0
+        float t = (2.0f - phase) / half_alpha;
+        int32_t idx = static_cast<int32_t>(t * 255.0f);
+        if (idx > 255) idx = 255;
+        gain = lut_tukey_taper[idx];
       } else {
-        if (quality >= GRAIN_QUALITY_MEDIUM) {
-          gain *= slope;
-          if (gain >= 1.0f) gain = 1.0f;
-        }
-      }
-      phase += increment;
-      if (phase >= 2.0f) {
         *destination = -1.0f;
         break;
+      }
+      phase += increment;
+      if (phase >= 2.0f && gain != -1.0f) {
+        // End of grain on next iteration
       }
       *destination++ = gain;
     }
@@ -136,11 +140,7 @@ class Grain {
     }
     
     // Pre-render the envelope in one pass.
-    if (envelope_smoothness_ == 0.0f) {
-      RenderEnvelope<false, quality>(envelope, size);
-    } else {
-      RenderEnvelope<true, quality>(envelope, size);
-    }
+    RenderEnvelope(envelope, size);
     
     const int32_t phase_increment = phase_increment_;
     const int32_t first_sample = first_sample_;
@@ -185,8 +185,7 @@ class Grain {
   int32_t phase_increment_;
   int32_t pre_delay_;
 
-  float envelope_smoothness_;
-  float envelope_slope_;
+  float envelope_half_alpha_;
   float envelope_phase_;
   float envelope_phase_increment_;
 

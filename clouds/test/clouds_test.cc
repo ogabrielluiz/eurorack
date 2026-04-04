@@ -30,7 +30,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
 #include <xmmintrin.h>
+#endif
 
 #include "clouds/dsp/granular_processor.h"
 #include "clouds/resources.h"
@@ -80,7 +82,7 @@ void TestDSP() {
 
   size_t remaining_samples = kSampleRate * duration;
   write_wav_header(fp_out, remaining_samples, 2);
-  fseek(fp_in, 48, SEEK_SET);
+  if (fp_in) fseek(fp_in, 48, SEEK_SET);
   
   uint8_t large_buffer[118784];
   uint8_t small_buffer[65536 - 128]; 
@@ -92,10 +94,10 @@ void TestDSP() {
 
   processor.set_num_channels(2);
   processor.set_low_fidelity(false);
-  processor.set_playback_mode(PLAYBACK_MODE_LOOPING_DELAY);
-  
+  processor.set_playback_mode(PLAYBACK_MODE_GRANULAR);
+
   Parameters* p = processor.mutable_parameters();
-  
+
   size_t block_counter = 0;
   float phase_ = 0.0f;
   bool synthetic = true;
@@ -105,17 +107,17 @@ void TestDSP() {
     uint16_t tri = (remaining_samples * 2);
     tri = tri > 32767 ? 65535 - tri : tri;
     float triangle = tri / 32768.0f;
-    
+
     p->gate = false;
     p->trigger = false;
-    p->freeze = true && (block_counter & 2047) > 1024;
+    p->freeze = (block_counter & 2047) > 1024;
     pot_noise += 0.05f * ((Random::GetSample() / 32768.0f) * 0.00f - pot_noise);
-    p->position = triangle * 0.0f + 0.00f;
+    p->position = 0.5f;
     p->size = 0.5f;
-    p->pitch = -7.0f + (triangle > 0.5f ? 1.0f : 0.0f) * 0.0f;
-    p->density = 0.0f;
+    p->pitch = 0.0f;
+    p->density = 0.7f;
     p->texture = 0.5f;
-    p->feedback = 0.0f;
+    p->feedback = 0.3f;
     p->dry_wet = 1.0f;
     p->reverb = 0.0f;
     p->stereo_spread = 0.0f;
@@ -224,7 +226,9 @@ void TestGrainSize() {
 }
 
 int main(void) {
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
   _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+#endif
   TestDSP();
   // TestGrainSize();
 }

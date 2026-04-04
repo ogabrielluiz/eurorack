@@ -61,6 +61,7 @@ extern const float lut_sine_window_4096[];
 extern const float lut_cutoff[];
 extern const float lut_grain_size[];
 extern const float lut_quantized_pitch[];
+extern const float lut_tukey_taper[];
 #define SRC_FILTER_1X_2_31 0
 #define SRC_FILTER_1X_2_31_SIZE 31
 #define SRC_FILTER_1X_2_45 1

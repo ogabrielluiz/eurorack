@@ -150,8 +150,8 @@ class GranularSamplePlayer {
     float gain_normalization = num_grains_ > 2.0f
         ? fast_rsqrt_carmack(num_grains_ - 1.0f)
         : 1.0f;  
-    float window_gain = 1.0f + 2.0f * parameters.granular.window_shape;
-    CONSTRAIN(window_gain, 1.0f, 2.0f);
+    float alpha = parameters.granular.window_shape;
+    float window_gain = 1.0f + alpha * (2.0f - alpha);
     gain_normalization *= Crossfade(
         1.0f, window_gain, parameters.granular.overlap);
 
