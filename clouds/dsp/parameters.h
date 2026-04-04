@@ -52,7 +52,9 @@ struct Parameters {
     float overlap;
     float window_shape;
     float stereo_spread;
-    bool use_deterministic_seed;
+    float determinism;
+    float jitter_amount;
+    float detune_cents;
   } granular;
   
   struct Spectral {

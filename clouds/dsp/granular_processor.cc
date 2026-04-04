@@ -95,7 +95,15 @@ void GranularProcessor::ProcessGranular(
   switch (playback_mode_) {
     case PLAYBACK_MODE_GRANULAR:
       // In Granular mode, DENSITY is a meta parameter.
-      parameters_.granular.use_deterministic_seed = parameters_.density < 0.5f;
+      // Determinism crossfade (replaces binary switch).
+      if (parameters_.density < 0.47f) {
+        parameters_.granular.determinism = 1.0f;
+      } else if (parameters_.density > 0.53f) {
+        parameters_.granular.determinism = 0.0f;
+      } else {
+        parameters_.granular.determinism = 1.0f
+            - (parameters_.density - 0.47f) * (1.0f / 0.06f);
+      }
       if (parameters_.density >= 0.53f) {
         parameters_.granular.overlap = (parameters_.density - 0.53f) * 2.12f;
       } else if (parameters_.density <= 0.47f) {
@@ -105,6 +113,14 @@ void GranularProcessor::ProcessGranular(
       }
       // TEXTURE maps directly to Tukey alpha (full range, no dead zone).
       parameters_.granular.window_shape = parameters_.texture;
+      // Jitter and detune from TEXTURE upper range.
+      {
+        float tex = parameters_.texture;
+        parameters_.granular.jitter_amount = (tex > 0.25f)
+            ? std::min((tex - 0.25f) * 4.0f * 0.15f, 0.15f) : 0.0f;
+        parameters_.granular.detune_cents = (tex > 0.5f)
+            ? std::min((tex - 0.5f) * 4.0f * 1.5f, 1.5f) : 0.0f;
+      }
   
       if (resolution() == 8) {
         player_.Play(buffer_8_, parameters_, &output[0].l, size);
