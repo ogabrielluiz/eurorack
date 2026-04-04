@@ -69,6 +69,7 @@ void GranularProcessor::ResetFilters() {
     fb_filter_[i].Init();
     lp_filter_[i].Init();
     hp_filter_[i].Init();
+    fb_lp_state_[i] = 0.0f;
   }
 }
 
@@ -193,6 +194,13 @@ void GranularProcessor::Process(
   fb_filter_[1].set(fb_filter_[0]);
   fb_filter_[0].Process<FILTER_MODE_HIGH_PASS>(&fb_[0].l, &fb_[0].l, size, 2);
   fb_filter_[1].Process<FILTER_MODE_HIGH_PASS>(&fb_[0].r, &fb_[0].r, size, 2);
+  const float fb_lp_coeff = 0.18f;  // ~6kHz cutoff at 32kHz
+  for (size_t i = 0; i < size; ++i) {
+    ONE_POLE(fb_lp_state_[0], fb_[i].l, fb_lp_coeff);
+    fb_[i].l = fb_lp_state_[0];
+    ONE_POLE(fb_lp_state_[1], fb_[i].r, fb_lp_coeff);
+    fb_[i].r = fb_lp_state_[1];
+  }
   float fb_gain = feedback * (1.0f - freeze_lp_);
   for (size_t i = 0; i < size; ++i) {
     in_[i].l += fb_gain * (

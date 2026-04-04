@@ -106,7 +106,7 @@ void TestDSP() {
   while (remaining_samples) {
     uint16_t tri = (remaining_samples * 2);
     tri = tri > 32767 ? 65535 - tri : tri;
-    float triangle = tri / 32768.0f;
+    (void)tri;
 
     p->gate = false;
     p->trigger = false;
@@ -161,7 +161,7 @@ void TestGrainSize() {
       for (int32_t _pi = 0; _pi < 3; _pi++) {
   size_t duration = 19;
   char name[80];
-  sprintf(name, "clouds_%d%d%d.wav", _p, _s, _pi);
+  snprintf(name, sizeof(name), "clouds_%d%d%d.wav", _p, _s, _pi);
   FILE* fp_out = fopen(name, "wb");
   FILE* fp_in = fopen("audio_samples/kettel_32k.wav", "rb");
 
