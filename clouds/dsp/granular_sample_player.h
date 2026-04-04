@@ -57,7 +57,7 @@ class GranularSamplePlayer {
   
   void Init(int32_t num_channels, int32_t max_num_grains) {
     max_num_grains_ = max_num_grains;
-    num_midfi_grains_ = 3 * max_num_grains / 4;
+    num_midfi_grains_ = max_num_grains / 2;
     gain_normalization_ = 1.0f;
     for (int32_t i = 0; i < kMaxNumGrains; ++i) {
       grains_[i].Init();
