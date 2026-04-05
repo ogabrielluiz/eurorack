@@ -200,9 +200,12 @@ void Ui::PaintLeds() {
       break;
   }
   
-  if (processor_->reversed()) {
-    // Blink FREEZE LED when reverse is active.
-    leds_.set_freeze(blink);
+  if (processor_->reversed() && processor_->frozen()) {
+    bool fast_blink = (system_clock.milliseconds() & 63) > 32;
+    leds_.set_freeze(fast_blink);
+  } else if (processor_->reversed()) {
+    bool slow_blink = (system_clock.milliseconds() & 511) > 256;
+    leds_.set_freeze(slow_blink);
   } else {
     leds_.set_freeze(processor_->frozen());
   }
