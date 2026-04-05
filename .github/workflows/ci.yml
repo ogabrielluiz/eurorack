@@ -41,6 +41,7 @@ jobs:
       - name: Build firmware
         run: |
           sed -i 's/-Werror //' stmlib/makefile.inc
+          touch clouds/resources.cc clouds/resources.h
           make -f clouds/makefile TOOLCHAIN_PATH=/usr/
           make -f clouds/makefile TOOLCHAIN_PATH=/usr/ build/clouds/clouds.bin
 
