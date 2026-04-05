@@ -248,6 +248,8 @@ void Ui::OnSwitchReleased(const Event& e) {
   switch (e.control_id) {
     case SWITCH_FREEZE:
       if (e.data >= kLongPressDuration) {
+        // Undo the freeze toggle that fired on press.
+        processor_->ToggleFreeze();
         processor_->ToggleReverse();
       }
       break;
