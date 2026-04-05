@@ -35,27 +35,28 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install ARM toolchain
-        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi
+      - name: Build firmware via Docker
+        run: docker build -t clouds-build .
 
-      - name: Build firmware
+      - name: Extract artifacts
         run: |
-          sed -i 's/-Werror //' stmlib/makefile.inc
-          touch clouds/resources.cc clouds/resources.h
-          make -f clouds/makefile TOOLCHAIN_PATH=/usr/
-          make -f clouds/makefile TOOLCHAIN_PATH=/usr/ build/clouds/clouds.bin
+          id=$(docker create clouds-build)
+          docker cp "$id:/eurorack/build/clouds/clouds.bin" clouds.bin
+          docker cp "$id:/eurorack/build/clouds/clouds.wav" cumulus.wav 2>/dev/null || true
+          docker rm "$id"
 
-      - name: Generate WAV
+      - name: Generate WAV (fallback if Docker didn't produce it)
+        if: ${{ hashFiles('cumulus.wav') == '' }}
         run: |
           pip install numpy scipy
           PYTHONPATH=. python3 stm_audio_bootloader/qpsk/encoder.py \
             -t stm32f4 -s 48000 -b 12000 -c 6000 -p 256 \
-            build/clouds/clouds.bin -o build/clouds/cumulus.wav
+            clouds.bin -o cumulus.wav
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cumulus-firmware
           path: |
-            build/clouds/clouds.bin
-            build/clouds/cumulus.wav
+            clouds.bin
+            cumulus.wav
