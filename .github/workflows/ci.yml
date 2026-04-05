@@ -1,0 +1,60 @@
+name: Cumulus CI
+
+on:
+  push:
+    branches: [master, cumulus]
+  pull_request:
+    branches: [master]
+
+jobs:
+  desktop-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Create symlinks for test includes
+        run: |
+          ln -sf "$(pwd)/clouds" clouds/test/clouds
+          ln -sf "$(pwd)/stmlib" clouds/test/stmlib
+
+      - name: Build test
+        run: make -C clouds/test
+
+      - name: Run regression (generate + verify baselines)
+        run: |
+          cd clouds/test
+          ./clouds_test --save-baseline
+          ./clouds_test
+
+  arm-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install ARM toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Build firmware
+        run: |
+          sed -i 's/-Werror //' stmlib/makefile.inc
+          make -f clouds/makefile TOOLCHAIN_PATH=/usr/
+          make -f clouds/makefile TOOLCHAIN_PATH=/usr/ build/clouds/clouds.bin
+
+      - name: Generate WAV
+        run: |
+          pip install numpy scipy
+          PYTHONPATH=. python3 stm_audio_bootloader/qpsk/encoder.py \
+            -t stm32f4 -s 48000 -b 12000 -c 6000 -p 256 \
+            build/clouds/clouds.bin -o build/clouds/cumulus.wav
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cumulus-firmware
+          path: |
+            build/clouds/clouds.bin
+            build/clouds/cumulus.wav
