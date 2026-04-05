@@ -326,8 +326,8 @@ static double RunScenario(const TestScenario& s, const char* output_dir) {
   return sqrt(sum_sq / sample_count);
 }
 
-// Compare current output against baseline.
-static void CompareBaseline(const char* output_dir, const TestScenario& s) {
+// Compare current output against baseline. Returns true if identical or no baseline.
+static bool CompareBaseline(const char* output_dir, const TestScenario& s) {
   char test_path[256], baseline_path[256];
   snprintf(test_path, sizeof(test_path), "%s/%s.wav", output_dir, s.name);
   snprintf(baseline_path, sizeof(baseline_path),
@@ -336,11 +336,11 @@ static void CompareBaseline(const char* output_dir, const TestScenario& s) {
   vector<int16_t> test_samples, baseline_samples;
   if (!ReadWav(baseline_path, &baseline_samples)) {
     printf("  [NO BASELINE]");
-    return;
+    return true;
   }
   if (!ReadWav(test_path, &test_samples)) {
     printf("  [READ ERROR]");
-    return;
+    return false;
   }
 
   size_t n = min(test_samples.size(), baseline_samples.size());
@@ -359,30 +359,37 @@ static void CompareBaseline(const char* output_dir, const TestScenario& s) {
 
   if (test_samples.size() != baseline_samples.size()) {
     printf("  [SIZE MISMATCH: %zu vs %zu]", test_samples.size(), baseline_samples.size());
+    return false;
   } else if (max_delta == 0) {
     printf("  [IDENTICAL]");
+    return true;
   } else {
     double rms_delta = sqrt(sum_sq / n);
     printf("  max:%d rms:%.1f diff:%zu/%zu", max_delta, rms_delta, num_different, n);
     if (max_delta > 100) {
       printf(" [CHANGED]");
+      return false;
     } else {
       printf(" [MINOR]");
+      return true;
     }
   }
 }
 
-static void TestRegression(const char* output_dir, bool save_baseline) {
+static int TestRegression(const char* output_dir, bool save_baseline) {
   mkdir(output_dir, 0755);
 
   printf("Cumulus regression suite: %zu scenarios\n", kNumScenarios);
   printf("%-26s %9s  %s\n", "Scenario", "RMS", "Baseline");
   printf("%-26s %9s  %s\n", "--------", "---", "--------");
 
+  int failures = 0;
   for (size_t i = 0; i < kNumScenarios; ++i) {
     double rms = RunScenario(kScenarios[i], output_dir);
     printf("  %-24s %7.1f", kScenarios[i].name, rms);
-    CompareBaseline(output_dir, kScenarios[i]);
+    if (!CompareBaseline(output_dir, kScenarios[i])) {
+      failures++;
+    }
     printf("\n");
   }
 
@@ -402,7 +409,12 @@ static void TestRegression(const char* output_dir, bool save_baseline) {
     }
   }
 
-  printf("\nDone.\n");
+  if (failures > 0) {
+    printf("\nFAILED: %d scenario(s) changed.\n", failures);
+  } else {
+    printf("\nPASSED.\n");
+  }
+  return failures;
 }
 
 // ---------------------------------------------------------------------------
@@ -441,9 +453,8 @@ int main(int argc, char* argv[]) {
 
   if (legacy) {
     TestDSP();
+    return 0;
   } else {
-    TestRegression("regression", save_baseline);
+    return TestRegression("regression", save_baseline) > 0 ? 1 : 0;
   }
-
-  return 0;
 }
