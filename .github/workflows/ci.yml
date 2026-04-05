@@ -4,7 +4,6 @@ on:
   push:
     branches: [master, cumulus]
   pull_request:
-    branches: [master]
 
 jobs:
   desktop-test:
@@ -35,28 +34,20 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Build firmware via Docker
+      - name: Build firmware and WAV via Docker
         run: docker build -t clouds-build .
 
       - name: Extract artifacts
         run: |
           id=$(docker create clouds-build)
-          docker cp "$id:/eurorack/build/clouds/clouds.bin" clouds.bin
-          docker cp "$id:/eurorack/build/clouds/clouds.wav" cumulus.wav 2>/dev/null || true
+          mkdir -p artifacts
+          docker cp "$id:/eurorack/build/clouds/clouds.bin" artifacts/cumulus.bin
+          docker cp "$id:/eurorack/build/clouds/clouds.wav" artifacts/cumulus.wav || \
+            echo "WAV not generated (expected if encoder needs Python 3 fixes)"
           docker rm "$id"
-
-      - name: Generate WAV (fallback if Docker didn't produce it)
-        if: ${{ hashFiles('cumulus.wav') == '' }}
-        run: |
-          pip install numpy scipy
-          PYTHONPATH=. python3 stm_audio_bootloader/qpsk/encoder.py \
-            -t stm32f4 -s 48000 -b 12000 -c 6000 -p 256 \
-            clouds.bin -o cumulus.wav
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cumulus-firmware
-          path: |
-            clouds.bin
-            cumulus.wav
+          path: artifacts/
