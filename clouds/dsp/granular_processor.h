@@ -95,13 +95,21 @@ class GranularProcessor {
   inline void ToggleFreeze() {
     parameters_.freeze = !parameters_.freeze;
   }
-  
+
   inline void set_freeze(bool freeze) {
     parameters_.freeze = freeze;
   }
 
   inline bool frozen() const {
     return parameters_.freeze;
+  }
+
+  inline void ToggleReverse() {
+    reverse_ = !reverse_;
+  }
+
+  inline bool reversed() const {
+    return reverse_;
   }
 
   inline void set_silence(bool silence) {
@@ -168,6 +176,7 @@ class GranularProcessor {
   
   bool silence_;
   bool bypass_;
+  bool reverse_;
   bool reset_buffers_;
   float freeze_lp_;
   float dry_wet_;
@@ -185,10 +194,13 @@ class GranularProcessor {
   Diffuser diffuser_;
   Reverb reverb_;
   PitchShifter pitch_shifter_;
-  stmlib::Svf fb_filter_[2];
   stmlib::Svf hp_filter_[2];
   stmlib::Svf lp_filter_[2];
-  
+  float fb_dc_state_[2];
+  float fb_bass_state_[2];
+  float fb_lp_state_[2];
+  float input_envelope_;
+
   AudioBuffer<RESOLUTION_8_BIT_MU_LAW> buffer_8_[2];
   AudioBuffer<RESOLUTION_16_BIT> buffer_16_[2];
   
@@ -197,7 +209,7 @@ class GranularProcessor {
   FloatFrame out_downsampled_[kMaxBlockSize / kDownsamplingFactor];
   FloatFrame out_[kMaxBlockSize];
   FloatFrame fb_[kMaxBlockSize];
-  
+
   int16_t tail_buffer_[2][256];
   
   Parameters parameters_;

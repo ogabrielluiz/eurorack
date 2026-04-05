@@ -37,6 +37,7 @@
 #include "stmlib/utils/dsp.h"
 
 #include "clouds/dsp/mu_law.h"
+#include "stmlib/utils/random.h"
 
 const int32_t kCrossFadeSize = 256;
 const int32_t kInterpolationTail = 8;
@@ -101,7 +102,10 @@ class AudioBuffer {
       quantization_error_ = sample - static_cast<float>(in);
       s8_[write_head_] = quantized;
     } else if (resolution == RESOLUTION_8_BIT_MU_LAW) {
-      int16_t sample = stmlib::Clip16(static_cast<int32_t>(in * 32768.0f));
+      int16_t dither = static_cast<int16_t>(stmlib::Random::GetWord() & 1)
+                     - static_cast<int16_t>(stmlib::Random::GetWord() & 1);
+      int16_t sample = stmlib::Clip16(
+          static_cast<int32_t>(in * 32768.0f) + dither);
       s8_[write_head_] = Lin2MuLaw(sample);
     } else {
       s8_[write_head_] = static_cast<int8_t>(

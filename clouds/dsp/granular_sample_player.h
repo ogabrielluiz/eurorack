@@ -57,7 +57,7 @@ class GranularSamplePlayer {
   
   void Init(int32_t num_channels, int32_t max_num_grains) {
     max_num_grains_ = max_num_grains;
-    num_midfi_grains_ = 3 * max_num_grains / 4;
+    num_midfi_grains_ = max_num_grains / 2;
     gain_normalization_ = 1.0f;
     for (int32_t i = 0; i < kMaxNumGrains; ++i) {
       grains_[i].Init();
@@ -65,6 +65,7 @@ class GranularSamplePlayer {
     num_grains_ = 0.0f;
     num_channels_ = num_channels;
     grain_size_hint_ = 1024.0f;
+    freeze_blend_ = 0.0f;
   }
   
   template<Resolution resolution>
@@ -77,22 +78,33 @@ class GranularSamplePlayer {
     float target_num_grains = max_num_grains_ * overlap;
     float p = target_num_grains / static_cast<float>(grain_size_hint_);
     float space_between_grains = grain_size_hint_ / target_num_grains;
-    if (parameters.granular.use_deterministic_seed) {
-      p = -1.0f;
-    } else {
-      grain_rate_phasor_ = -1000.0f;
-    }
-    
+    float determinism = parameters.granular.determinism;
+
+    // Freeze smoothly scales jitter/detune to zero.
+    ONE_POLE(freeze_blend_, parameters.freeze ? 1.0f : 0.0f, 0.005f);
+    // Perceptual masking: tighten scatter when input is quiet (artifacts
+    // would be exposed), loosen when loud (signal masks them).
+    float masking = 0.4f + 0.6f * std::min(
+        parameters.granular.input_level * 2.0f, 1.0f);
+    float effective_jitter = parameters.granular.jitter_amount
+        * (1.0f - freeze_blend_) * masking;
+    float effective_detune = parameters.granular.detune_cents
+        * (1.0f - freeze_blend_) * masking;
+
+    // Scale probabilistic rate by (1 - determinism).
+    float p_scaled = p * (1.0f - determinism);
+
     // Build a list of available grains.
     int32_t num_available_grains = FillAvailableGrainsList();
-    
+
     // Try to schedule new grains.
     bool seed_trigger = parameters.trigger;
     for (size_t t = 0; t < size; ++t) {
       grain_rate_phasor_ += 1.0f;
-      bool seed_probabilistic = Random::GetFloat() < p
+      bool seed_probabilistic = Random::GetFloat() < p_scaled
           && target_num_grains > num_grains_;
-      bool seed_deterministic = grain_rate_phasor_ >= space_between_grains;
+      bool seed_deterministic = (determinism > 0.01f)
+          && grain_rate_phasor_ >= space_between_grains;
       bool seed = seed_probabilistic || seed_deterministic || seed_trigger;
       if (num_available_grains && seed) {
         --num_available_grains;
@@ -103,16 +115,29 @@ class GranularSamplePlayer {
         } else {
           quality = GRAIN_QUALITY_HIGH;
         }
-        
+
+        // Timing jitter: offset the grain start within the block.
+        int32_t jitter_offset = static_cast<int32_t>(
+            Random::GetFloat() * size * effective_jitter);
+        int32_t jittered_t = std::min(
+            static_cast<int32_t>(size) - 1,
+            static_cast<int32_t>(t) + jitter_offset);
+
+        bool reverse = parameters.granular.reverse;
+
         Grain* g = &grains_[index];
         ScheduleGrain(
             g,
             parameters,
-            t,
+            jittered_t,
             buffer->size(),
-            buffer->head() - size + t,
-            quality);
-        grain_rate_phasor_ = 0.0f;
+            buffer->head() - size + jittered_t,
+            quality,
+            effective_detune,
+            reverse);
+        // Phasor dither: reset to small random offset.
+        grain_rate_phasor_ = Random::GetFloat()
+            * space_between_grains * effective_jitter;
         seed_trigger = false;
       }
     }
@@ -150,8 +175,8 @@ class GranularSamplePlayer {
     float gain_normalization = num_grains_ > 2.0f
         ? fast_rsqrt_carmack(num_grains_ - 1.0f)
         : 1.0f;  
-    float window_gain = 1.0f + 2.0f * parameters.granular.window_shape;
-    CONSTRAIN(window_gain, 1.0f, 2.0f);
+    float alpha = parameters.granular.window_shape;
+    float window_gain = 1.0f + alpha * (2.0f - alpha);
     gain_normalization *= Crossfade(
         1.0f, window_gain, parameters.granular.overlap);
 
@@ -181,9 +206,16 @@ class GranularSamplePlayer {
       int32_t pre_delay,
       int32_t buffer_size,
       int32_t buffer_head,
-      GrainQuality quality) {
+      GrainQuality quality,
+      float detune_cents,
+      bool reverse) {
     float position = parameters.position;
     float pitch = parameters.pitch;
+    if (detune_cents > 0.001f) {
+      float pitch_nudge = (Random::GetFloat() + Random::GetFloat() - 1.0f)
+                          * detune_cents * (1.0f / 100.0f);
+      pitch += pitch_nudge;
+    }
     float window_shape = parameters.granular.window_shape;
     float grain_size = Interpolate(lut_grain_size, parameters.size, 256.0f);
     float pitch_ratio = SemitonesToRatio(pitch);
@@ -231,7 +263,8 @@ class GranularSamplePlayer {
         window_shape,
         gain_l,
         gain_r,
-        quality);
+        quality,
+        reverse);
     ONE_POLE(grain_size_hint_, grain_size, 0.1f);
   }
   
@@ -243,6 +276,7 @@ class GranularSamplePlayer {
   float gain_normalization_;
   float grain_size_hint_;
   float grain_rate_phasor_;
+  float freeze_blend_;
   
   Grain grains_[kMaxNumGrains];
   int32_t available_grains_[kMaxNumGrains];

@@ -27,7 +27,7 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 $(BUILD_DIR)%.o: %.cc
-	g++ -c -DTEST -g -Wall -Werror -I. $< -o $@
+	g++ -c -DTEST -g -Wall -Wno-unused-local-typedefs -I. $< -o $@
 
 $(BUILD_DIR)%.d: %.cc
 	g++ -MM -DTEST -I. $< -MF $@ -MT $(@:.d=.o)

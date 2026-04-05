@@ -200,7 +200,15 @@ void Ui::PaintLeds() {
       break;
   }
   
-  leds_.set_freeze(processor_->frozen());
+  if (processor_->reversed() && processor_->frozen()) {
+    bool fast_blink = (system_clock.milliseconds() & 63) > 32;
+    leds_.set_freeze(fast_blink);
+  } else if (processor_->reversed()) {
+    bool slow_blink = (system_clock.milliseconds() & 511) > 256;
+    leds_.set_freeze(slow_blink);
+  } else {
+    leds_.set_freeze(processor_->frozen());
+  }
   if (processor_->bypass()) {
     leds_.PaintBar(lut_db[meter_->peak() >> 7]);
     leds_.set_freeze(true);
@@ -242,6 +250,11 @@ void Ui::OnSecretHandshake() {
 void Ui::OnSwitchReleased(const Event& e) {
   switch (e.control_id) {
     case SWITCH_FREEZE:
+      if (e.data >= kLongPressDuration) {
+        // Undo the freeze toggle that fired on press.
+        processor_->ToggleFreeze();
+        processor_->ToggleReverse();
+      }
       break;
 
     case SWITCH_MODE:

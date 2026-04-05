@@ -1,0 +1,4 @@
+build/
+clouds_test
+regression/
+*.wav
